@@ -20,6 +20,8 @@ public class DelimitedTextFileReader extends AbstractFileReader<DelimitedTextFil
     public static final String FILE_READER_DELIMITED_TOKEN = FILE_READER_DELIMITED + "token";
     public static final String FILE_READER_DELIMITED_ENCODING = FILE_READER_DELIMITED + "encoding";
     public static final String FILE_READER_DELIMITED_DEFAULT_VALUE = FILE_READER_DELIMITED + "default_value";
+    public static final String FILE_READER_DELIMITED_SCHEMA_NAME = FILE_READER_DELIMITED + "schema_name";
+    public static final String FILE_READER_DELIMITED_OPTIONAL_SCHEMA = FILE_READER_DELIMITED + "optional_schema";
 
     private static final String DEFAULT_COLUMN_NAME = "column";
 
@@ -29,6 +31,8 @@ public class DelimitedTextFileReader extends AbstractFileReader<DelimitedTextFil
     private String token;
     private String defaultValue;
     private boolean hasHeader;
+    private String schemaName;
+    private boolean optionalSchema;
 
     public DelimitedTextFileReader(FileSystem fs, Path filePath, Map<String, Object> config) throws IOException {
         super(fs, filePath, new DelimitedTxtToStruct(), config);
@@ -41,12 +45,18 @@ public class DelimitedTextFileReader extends AbstractFileReader<DelimitedTextFil
         this.offset = new DelimitedTextOffset(0, hasHeader);
 
         SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+        schemaBuilder.name(this.schemaName);
+
         if (hasNext()) {
             String firstLine = inner.nextRecord().getValue();
             String columns[] = firstLine.split(token);
             IntStream.range(0, columns.length).forEach(index -> {
                 String columnName = hasHeader ? columns[index] : DEFAULT_COLUMN_NAME + "_" + ++index;
-                schemaBuilder.field(columnName, SchemaBuilder.STRING_SCHEMA);
+                Schema fieldSchema = SchemaBuilder.STRING_SCHEMA;
+                if (this.optionalSchema) {
+                    fieldSchema = SchemaBuilder.OPTIONAL_STRING_SCHEMA;
+                }
+                schemaBuilder.field(columnName, fieldSchema);
             });
 
             if (!hasHeader) {
@@ -67,6 +77,11 @@ public class DelimitedTextFileReader extends AbstractFileReader<DelimitedTextFil
         this.defaultValue = config.get(FILE_READER_DELIMITED_DEFAULT_VALUE) == null ?
                 null : config.get(FILE_READER_DELIMITED_DEFAULT_VALUE).toString();
         this.hasHeader = Boolean.valueOf((String) config.get(FILE_READER_DELIMITED_HEADER));
+        if (config.get(FILE_READER_DELIMITED_SCHEMA_NAME) != null &&
+                !config.get(FILE_READER_DELIMITED_SCHEMA_NAME).toString().equals("")) {
+            this.schemaName = config.get(FILE_READER_DELIMITED_SCHEMA_NAME).toString();
+        }
+        this.optionalSchema = Boolean.valueOf((String) config.get(FILE_READER_DELIMITED_OPTIONAL_SCHEMA));
     }
 
     @Override
